@@ -1,0 +1,5 @@
+name: whatsapp-dump
+channels:
+  - conda-forge
+dependencies:
+  - nodejs
