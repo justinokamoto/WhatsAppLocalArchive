@@ -1,4 +1,4 @@
-# wad — WhatsApp Local Archive
+# wala — WhatsApp Local Archive
 
 Local, read-only WhatsApp archive built on Baileys. Ingests history + live
 messages into SQLite. v1 is text-only; other types are archived raw, not projected.

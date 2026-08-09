@@ -1,4 +1,4 @@
-name: whatsapp-dump
+name: whatsapp-local-archive
 channels:
   - conda-forge
 dependencies:
