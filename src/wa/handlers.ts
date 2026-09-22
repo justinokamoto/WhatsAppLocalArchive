@@ -1,7 +1,8 @@
 import type { DatabaseSync } from 'node:sqlite';
 import type { BaileysEventMap, WAMessage } from 'baileys';
+import { isJidGroup } from 'baileys';
 import { ingestBatch, tombstoneMessage, tombstoneChat } from '../ingest/ingest.ts';
-import { linkAddresses, bindSelfJid } from '../ingest/resolve.ts';
+import { linkAddresses, bindSelfJid, resolveChatId } from '../ingest/resolve.ts';
 
 /**
  * Pure mapping from Baileys events to archive mutations. Deliberately decoupled
@@ -21,6 +22,11 @@ export function onHistorySet(ctx: HandlerContext, payload: BaileysEventMap['mess
   for (const map of payload.lidPnMappings ?? []) {
     if (map?.pn && map?.lid) {
       linkAddresses(ctx.db, ctx.accountId, map.pn, map.lid, nowMs, 'history.lidPnMappings');
+    }
+  }
+  for (const chat of payload.chats ?? []) {
+    if (chat.id && chat.name && isJidGroup(chat.id)) {
+      resolveChatId(ctx.db, ctx.accountId, chat.id, nowMs, chat.name);
     }
   }
   if (payload.messages?.length) {
@@ -91,6 +97,24 @@ export function onChatsDelete(ctx: HandlerContext, jids: BaileysEventMap['chats.
   const nowMs = ctx.now();
   for (const jid of jids) {
     tombstoneChat(ctx.db, ctx.accountId, jid, { sourceEventName: 'chats.delete', nowMs });
+  }
+}
+
+/** Newly (or re-)seen groups: record their subject. */
+export function onGroupsUpsert(ctx: HandlerContext, groups: BaileysEventMap['groups.upsert']): void {
+  const nowMs = ctx.now();
+  for (const group of groups) {
+    resolveChatId(ctx.db, ctx.accountId, group.id, nowMs, group.subject);
+  }
+}
+
+/** Partial group metadata changes; only act on ones that actually carry a subject. */
+export function onGroupsUpdate(ctx: HandlerContext, updates: BaileysEventMap['groups.update']): void {
+  const nowMs = ctx.now();
+  for (const update of updates) {
+    if (update.id && update.subject) {
+      resolveChatId(ctx.db, ctx.accountId, update.id, nowMs, update.subject);
+    }
   }
 }
 

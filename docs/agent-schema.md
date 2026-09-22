@@ -93,7 +93,8 @@ change; the identity rowid is the stable key.
 One row per conversation, keyed by `identity_id`. `chat_type` is one of
 `individual`, `group`, `broadcast`, `status`, `newsletter`, `unknown`. Group
 messages retain both the group JID (`messages.remote_jid_raw`, `@g.us`) and the
-sender (`participant_jid_raw`).
+sender (`participant_jid_raw`). For `chat_type = 'group'`, `name_snapshot`
+holds the group's subject, kept current as it's renamed.
 
 ### `message_versions`
 Empty for never-edited messages. On an edit, version 0 holds the original and

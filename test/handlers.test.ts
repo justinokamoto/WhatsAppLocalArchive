@@ -7,6 +7,8 @@ import {
   onMessagesUpdate,
   onMessagesDelete,
   onChatsDelete,
+  onGroupsUpsert,
+  onGroupsUpdate,
   onLidMapping,
   onOwnJid,
 } from '../src/wa/handlers.ts';
@@ -17,6 +19,7 @@ const NOW = 1_754_225_000_000;
 const ALICE = '15551230001@s.whatsapp.net';
 const ALICE_LID = '88112233@lid';
 const BOB = '15551230002@s.whatsapp.net';
+const GROUP = '123456789-987654@g.us';
 
 function setup(): HandlerContext {
   resetIds();
@@ -27,6 +30,13 @@ function setup(): HandlerContext {
 
 const count = (ctx: HandlerContext, table: string): number =>
   (ctx.db.prepare(`SELECT count(*) c FROM ${table}`).get() as { c: number }).c;
+
+const nameSnapshotFor = (ctx: HandlerContext, jid: string): string | null =>
+  (
+    ctx.db
+      .prepare('SELECT name_snapshot FROM chats WHERE canonical_remote_jid = ?')
+      .get(jid) as { name_snapshot: string | null } | undefined
+  )?.name_snapshot ?? null;
 
 test('onHistorySet links lidPnMappings before ingesting, yielding one identity', () => {
   const ctx = setup();
@@ -43,6 +53,46 @@ test('onHistorySet links lidPnMappings before ingesting, yielding one identity',
     .prepare('SELECT count(DISTINCT identity_id) c FROM identity_addresses WHERE jid IN (?, ?)')
     .get(ALICE, ALICE_LID) as { c: number };
   assert.equal(distinct.c, 1);
+  ctx.db.close();
+});
+
+test('onHistorySet records a group subject from payload.chats', () => {
+  const ctx = setup();
+  onHistorySet(ctx, {
+    chats: [
+      { id: GROUP, name: 'Trip Planning' },
+      { id: ALICE, name: 'Not a group, ignored' },
+    ],
+    contacts: [],
+    lidPnMappings: [],
+    messages: [],
+  } as never);
+
+  assert.equal(nameSnapshotFor(ctx, GROUP), 'Trip Planning');
+  assert.equal(nameSnapshotFor(ctx, ALICE), null, 'individual chat names are not applied');
+  ctx.db.close();
+});
+
+test('onGroupsUpsert records a group subject on first sight', () => {
+  const ctx = setup();
+  onGroupsUpsert(ctx, [{ id: GROUP, subject: 'Team Standup' }] as never);
+  assert.equal(nameSnapshotFor(ctx, GROUP), 'Team Standup');
+  ctx.db.close();
+});
+
+test('onGroupsUpdate overwrites an existing group subject', () => {
+  const ctx = setup();
+  onGroupsUpsert(ctx, [{ id: GROUP, subject: 'Old Name' }] as never);
+  onGroupsUpdate(ctx, [{ id: GROUP, subject: 'Renamed' }] as never);
+  assert.equal(nameSnapshotFor(ctx, GROUP), 'Renamed');
+  ctx.db.close();
+});
+
+test('onGroupsUpdate ignores partial updates with no subject', () => {
+  const ctx = setup();
+  onGroupsUpsert(ctx, [{ id: GROUP, subject: 'Stays The Same' }] as never);
+  onGroupsUpdate(ctx, [{ id: GROUP }] as never);
+  assert.equal(nameSnapshotFor(ctx, GROUP), 'Stays The Same');
   ctx.db.close();
 });
 
