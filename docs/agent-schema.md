@@ -87,7 +87,10 @@ A person can be addressed two ways in WhatsApp v7: by phone number
 row; every observed JID is a row in `identity_addresses` pointing at it. Always
 join through `sender_identity_id` / `mentioned_identity_id`, **not** raw JIDs, to
 count a person once. `identities.canonical_jid` is a display choice and may
-change; the identity rowid is the stable key.
+change; the identity rowid is the stable key. `display_name` is populated from
+WhatsApp contact sync (saved contact name, business name, or self-set push
+name, in that priority order) the first time one is seen — it will not change
+if the contact later renames themselves.
 
 ### `chats`
 One row per conversation, keyed by `identity_id`. `chat_type` is one of

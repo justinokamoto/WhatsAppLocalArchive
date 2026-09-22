@@ -2,7 +2,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import type { BaileysEventMap, WAMessage } from 'baileys';
 import { isJidGroup } from 'baileys';
 import { ingestBatch, tombstoneMessage, tombstoneChat } from '../ingest/ingest.ts';
-import { linkAddresses, bindSelfJid, resolveChatId } from '../ingest/resolve.ts';
+import { linkAddresses, bindSelfJid, resolveChatId, resolveIdentityId } from '../ingest/resolve.ts';
 
 /**
  * Pure mapping from Baileys events to archive mutations. Deliberately decoupled
@@ -16,6 +16,20 @@ export type HandlerContext = {
   now: () => number;
 };
 
+/**
+ * Pick the most authoritative display name off a Contact (or partial update):
+ * a saved contact name beats a business-verified name beats the contact's own
+ * self-set push name beats their username.
+ */
+function bestDisplayName(contact: {
+  name?: string | null;
+  verifiedName?: string | null;
+  notify?: string | null;
+  username?: string | null;
+}): string | null {
+  return contact.name || contact.verifiedName || contact.notify || contact.username || null;
+}
+
 /** History sync chunk: link any LID<->PN mappings first, then ingest as history. */
 export function onHistorySet(ctx: HandlerContext, payload: BaileysEventMap['messaging-history.set']): void {
   const nowMs = ctx.now();
@@ -27,6 +41,12 @@ export function onHistorySet(ctx: HandlerContext, payload: BaileysEventMap['mess
   for (const chat of payload.chats ?? []) {
     if (chat.id && chat.name && isJidGroup(chat.id)) {
       resolveChatId(ctx.db, ctx.accountId, chat.id, nowMs, chat.name);
+    }
+  }
+  for (const contact of payload.contacts ?? []) {
+    const name = contact.id ? bestDisplayName(contact) : null;
+    if (contact.id && name) {
+      resolveIdentityId(ctx.db, ctx.accountId, contact.id, nowMs, name);
     }
   }
   if (payload.messages?.length) {
@@ -114,6 +134,28 @@ export function onGroupsUpdate(ctx: HandlerContext, updates: BaileysEventMap['gr
   for (const update of updates) {
     if (update.id && update.subject) {
       resolveChatId(ctx.db, ctx.accountId, update.id, nowMs, update.subject);
+    }
+  }
+}
+
+/** Newly (or re-)seen contacts: record their display name. */
+export function onContactsUpsert(ctx: HandlerContext, contacts: BaileysEventMap['contacts.upsert']): void {
+  const nowMs = ctx.now();
+  for (const contact of contacts) {
+    const name = bestDisplayName(contact);
+    if (name) {
+      resolveIdentityId(ctx.db, ctx.accountId, contact.id, nowMs, name);
+    }
+  }
+}
+
+/** Partial contact changes; only act on ones that actually carry a name. */
+export function onContactsUpdate(ctx: HandlerContext, updates: BaileysEventMap['contacts.update']): void {
+  const nowMs = ctx.now();
+  for (const update of updates) {
+    const name = update.id ? bestDisplayName(update) : null;
+    if (update.id && name) {
+      resolveIdentityId(ctx.db, ctx.accountId, update.id, nowMs, name);
     }
   }
 }

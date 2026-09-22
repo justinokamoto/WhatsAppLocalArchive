@@ -19,6 +19,8 @@ import {
   onChatsDelete,
   onGroupsUpsert,
   onGroupsUpdate,
+  onContactsUpsert,
+  onContactsUpdate,
   onLidMapping,
   onOwnJid,
 } from './handlers.ts';
@@ -103,6 +105,8 @@ export async function startSocket(opts: StartOptions): Promise<WASocket> {
   sock.ev.on('chats.delete', (jids) => onChatsDelete(ctx, jids));
   sock.ev.on('groups.upsert', (groups) => onGroupsUpsert(ctx, groups));
   sock.ev.on('groups.update', (updates) => onGroupsUpdate(ctx, updates));
+  sock.ev.on('contacts.upsert', (contacts) => onContactsUpsert(ctx, contacts));
+  sock.ev.on('contacts.update', (updates) => onContactsUpdate(ctx, updates));
   sock.ev.on('lid-mapping.update', (mapping) => onLidMapping(ctx, mapping));
 
   return sock;

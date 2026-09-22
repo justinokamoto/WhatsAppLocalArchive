@@ -9,6 +9,8 @@ import {
   onChatsDelete,
   onGroupsUpsert,
   onGroupsUpdate,
+  onContactsUpsert,
+  onContactsUpdate,
   onLidMapping,
   onOwnJid,
 } from '../src/wa/handlers.ts';
@@ -37,6 +39,17 @@ const nameSnapshotFor = (ctx: HandlerContext, jid: string): string | null =>
       .prepare('SELECT name_snapshot FROM chats WHERE canonical_remote_jid = ?')
       .get(jid) as { name_snapshot: string | null } | undefined
   )?.name_snapshot ?? null;
+
+const displayNameFor = (ctx: HandlerContext, jid: string): string | null =>
+  (
+    ctx.db
+      .prepare(
+        `SELECT i.display_name AS display_name FROM identities i
+         JOIN identity_addresses a ON a.identity_id = i.id
+         WHERE a.jid = ?`,
+      )
+      .get(jid) as { display_name: string | null } | undefined
+  )?.display_name ?? null;
 
 test('onHistorySet links lidPnMappings before ingesting, yielding one identity', () => {
   const ctx = setup();
@@ -93,6 +106,48 @@ test('onGroupsUpdate ignores partial updates with no subject', () => {
   onGroupsUpsert(ctx, [{ id: GROUP, subject: 'Stays The Same' }] as never);
   onGroupsUpdate(ctx, [{ id: GROUP }] as never);
   assert.equal(nameSnapshotFor(ctx, GROUP), 'Stays The Same');
+  ctx.db.close();
+});
+
+test('onHistorySet records a contact display name from payload.contacts', () => {
+  const ctx = setup();
+  onHistorySet(ctx, {
+    chats: [],
+    contacts: [{ id: ALICE, name: 'Alice Smith' }],
+    lidPnMappings: [],
+    messages: [],
+  } as never);
+
+  assert.equal(displayNameFor(ctx, ALICE), 'Alice Smith');
+  ctx.db.close();
+});
+
+test('onContactsUpsert records a display name on first sight, falling back to notify', () => {
+  const ctx = setup();
+  onContactsUpsert(ctx, [{ id: BOB, notify: 'Bobby' }] as never);
+  assert.equal(displayNameFor(ctx, BOB), 'Bobby');
+  ctx.db.close();
+});
+
+test('onContactsUpsert prefers a saved contact name over a self-set notify name', () => {
+  const ctx = setup();
+  onContactsUpsert(ctx, [{ id: ALICE, name: 'Real Name', notify: 'Nickname' }] as never);
+  assert.equal(displayNameFor(ctx, ALICE), 'Real Name');
+  ctx.db.close();
+});
+
+test('onContactsUpdate with no name-bearing field is a no-op', () => {
+  const ctx = setup();
+  onContactsUpdate(ctx, [{ id: ALICE, imgUrl: 'https://example.com/pic.jpg' }] as never);
+  assert.equal(displayNameFor(ctx, ALICE), null);
+  ctx.db.close();
+});
+
+test('onContactsUpsert does not clobber an existing different display name', () => {
+  const ctx = setup();
+  onContactsUpsert(ctx, [{ id: ALICE, name: 'First Name' }] as never);
+  onContactsUpsert(ctx, [{ id: ALICE, name: 'Second Name' }] as never);
+  assert.equal(displayNameFor(ctx, ALICE), 'First Name');
   ctx.db.close();
 });
 
