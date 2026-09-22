@@ -65,7 +65,7 @@ export async function startSocket(opts: StartOptions): Promise<WASocket> {
       keys: makeCacheableSignalKeyStore(auth.state.keys),
     },
     // Full history sync needs a non-mobile browser signature.
-    browser: Browsers.macOS('Desktop'),
+    browser: Browsers.macOS('Chrome'),
     syncFullHistory: true,
     // A read-only archive should stay invisible: never present as online.
     markOnlineOnConnect: false,
