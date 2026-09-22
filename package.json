@@ -13,6 +13,7 @@
     "replay": "node src/main.ts --replay-fixtures"
   },
   "dependencies": {
-    "baileys": "7.0.0-rc14"
+    "baileys": "7.0.0-rc14",
+    "qrcode-terminal": "^0.12.0"
   }
 }

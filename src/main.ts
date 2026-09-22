@@ -1,3 +1,4 @@
+import qrcodeTerminal from 'qrcode-terminal';
 import { openDb, ensureAccount, ensureDataDirs } from './db/db.ts';
 import { requirePassphrase } from './config.ts';
 import { openEncryptedAuthState } from './auth/keystore.ts';
@@ -30,7 +31,7 @@ async function main(): Promise<void> {
     auth,
     onQr: (qr) => {
       console.log('\nScan this QR code with WhatsApp (Linked Devices):\n');
-      console.log(qr);
+      qrcodeTerminal.generate(qr, { small: true });
       console.log('\nOr run with a pairing code by linking via phone number.\n');
     },
   });
